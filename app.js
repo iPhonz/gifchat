@@ -1,6 +1,7 @@
 const API_KEY = 'AIzaSyCkJ44bhL93TkK7MeyBUpfEo53FngnI1lU';
 const TENOR_API_URL = 'https://tenor.googleapis.com/v2';
 
+// App State
 let selectedGif = null;
 let mediaRecorder = null;
 let recordedChunks = [];
@@ -17,105 +18,103 @@ const messagesContainer = document.getElementById('messages');
 const cameraBtn = document.getElementById('camera-btn');
 const videoPreview = document.getElementById('video-preview');
 const recordBtn = document.getElementById('record-btn');
-const closeCamera = document.getElementById('close-camera');
-const cameraContainer = document.getElementById('camera-container');
-const recordTimer = document.getElementById('record-timer');
+const cameraModal = document.getElementById('camera-modal');
+const closeModal = document.querySelector('.close-modal');
+const recordTimer = document.querySelector('.record-timer');
 const userHandle = document.getElementById('user-handle');
 const recordingStatus = document.querySelector('.recording-status');
+const replyIndicator = document.querySelector('.reply-indicator');
+const cancelReplyBtn = document.querySelector('.cancel-reply');
 
-class MockWebSocket {
+// Message Template
+const messageTemplate = document.getElementById('message-template');
+
+class ChatConnection {
     constructor() {
         this.messages = [];
+        this.messageId = 1;
     }
 
     send(messageData) {
+        const fullMessage = {
+            id: this.messageId++,
+            ...messageData,
+            sent: true,
+            timestamp: new Date().toISOString()
+        };
+        
         setTimeout(() => {
-            this.onmessage({ 
-                data: JSON.stringify({
-                    ...JSON.parse(messageData),
-                    sent: true,
-                    timestamp: new Date().toISOString()
-                })
-            });
+            this.onmessage({ data: JSON.stringify(fullMessage) });
         }, 100);
     }
 }
 
-const ws = new MockWebSocket();
+const chat = new ChatConnection();
 
-ws.onmessage = (event) => {
+chat.onmessage = (event) => {
     const messageData = JSON.parse(event.data);
-    const message = createMessageElement(messageData);
+    displayMessage(messageData);
+};
+
+function displayMessage(messageData) {
+    const messageEl = createMessageElement(messageData);
     
     if (messageData.replyTo) {
         const parentMessage = document.querySelector(`[data-message-id="${messageData.replyTo}"]`);
         if (parentMessage) {
-            const replyContainer = parentMessage.querySelector('.reply-container') || 
-                createReplyContainer(parentMessage);
-            replyContainer.appendChild(message);
+            const repliesContainer = parentMessage.querySelector('.replies');
+            repliesContainer.appendChild(messageEl);
         }
     } else {
-        messagesContainer.appendChild(message);
+        messagesContainer.appendChild(messageEl);
     }
     
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-};
-
-function createMessageElement(messageData) {
-    const message = document.createElement('div');
-    message.className = `message ${messageData.sent ? 'sent' : ''}`;
-    message.dataset.messageId = Date.now().toString();
-    
-    const img = document.createElement('img');
-    img.src = messageData.gifUrl;
-    message.appendChild(img);
-    
-    if (messageData.caption) {
-        const caption = document.createElement('div');
-        caption.className = 'message-caption';
-        caption.textContent = messageData.caption;
-        message.appendChild(caption);
-    }
-    
-    const messageInfo = document.createElement('div');
-    messageInfo.className = 'message-info';
-    
-    const handle = document.createElement('span');
-    handle.className = 'message-handle';
-    handle.textContent = messageData.handle;
-    messageInfo.appendChild(handle);
-    
-    const timestamp = document.createElement('span');
-    timestamp.className = 'message-timestamp';
-    timestamp.textContent = new Date(messageData.timestamp).toLocaleTimeString();
-    messageInfo.appendChild(timestamp);
-    
-    const replyBtn = document.createElement('button');
-    replyBtn.className = 'reply-button';
-    replyBtn.textContent = 'Reply';
-    replyBtn.onclick = () => startReply(message.dataset.messageId);
-    messageInfo.appendChild(replyBtn);
-    
-    message.appendChild(messageInfo);
-    return message;
 }
 
-function createReplyContainer(parentMessage) {
-    const container = document.createElement('div');
-    container.className = 'reply-container';
-    parentMessage.appendChild(container);
-    return container;
+function createMessageElement(messageData) {
+    const messageEl = messageTemplate.content.cloneNode(true).children[0];
+    messageEl.dataset.messageId = messageData.id;
+    
+    if (messageData.sent) {
+        messageEl.classList.add('sent');
+    }
+    
+    const gifImg = messageEl.querySelector('.message-gif');
+    gifImg.src = messageData.gifUrl;
+    
+    const caption = messageEl.querySelector('.message-caption');
+    if (messageData.caption) {
+        caption.textContent = messageData.caption;
+    } else {
+        caption.remove();
+    }
+    
+    const handle = messageEl.querySelector('.message-handle');
+    handle.textContent = messageData.handle;
+    
+    const time = messageEl.querySelector('.message-time');
+    time.textContent = new Date(messageData.timestamp).toLocaleTimeString();
+    
+    const replyBtn = messageEl.querySelector('.reply-btn');
+    replyBtn.onclick = () => startReply(messageData.id);
+    
+    return messageEl;
 }
 
 function startReply(messageId) {
     replyingTo = messageId;
-    gifSearch.placeholder = 'Search for a GIF to reply...';
+    replyIndicator.style.display = 'flex';
+    const parentMessage = document.querySelector(`[data-message-id="${messageId}"]`);
+    const parentGif = parentMessage.querySelector('.message-gif').src;
+    replyIndicator.querySelector('.reply-to').textContent = 
+        parentMessage.querySelector('.message-handle').textContent;
     gifSearch.focus();
 }
 
 function cancelReply() {
     replyingTo = null;
-    gifSearch.placeholder = 'Search for GIFs...';
+    replyIndicator.style.display = 'none';
 }
 
 async function initCamera() {
@@ -127,22 +126,23 @@ async function initCamera() {
                 frameRate: { ideal: 15 }
             } 
         });
+        
         videoPreview.srcObject = stream;
         await videoPreview.play();
         
         mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'video/webm;codecs=vp8'
+            mimeType: 'video/webm;codecs=vp8',
+            videoBitsPerSecond: 2500000 // 2.5 Mbps
         });
+        
         mediaRecorder.ondataavailable = handleDataAvailable;
         mediaRecorder.onstop = handleStop;
         
         recordBtn.disabled = false;
-        recordBtn.textContent = 'Start Recording';
-        recordingTimeLeft = 3;
-        recordTimer.textContent = `${recordingTimeLeft}s`;
+        recordingStatus.textContent = 'Ready to record';
     } catch (error) {
         console.error('Error accessing camera:', error);
-        alert('Unable to access camera. Please make sure you have granted camera permissions.');
+        recordingStatus.textContent = 'Error accessing camera. Please check permissions.';
     }
 }
 
@@ -155,16 +155,17 @@ function handleDataAvailable(event) {
 async function handleStop() {
     clearInterval(recordingInterval);
     recordBtn.textContent = 'Start Recording';
+    recordBtn.classList.remove('recording');
     recordingTimeLeft = 3;
     recordTimer.textContent = `${recordingTimeLeft}s`;
-    recordingStatus.textContent = 'Converting to GIF...';
-    
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    recordedChunks = [];
     
     try {
+        recordingStatus.textContent = 'Processing video...';
+        const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+        recordedChunks = [];
+        
         const video = document.createElement('video');
-        video.src = URL.createObjectURL(blob);
+        video.src = URL.createObjectURL(videoBlob);
         video.muted = true;
         
         await new Promise((resolve) => {
@@ -185,17 +186,20 @@ async function handleStop() {
         });
         
         video.currentTime = 0;
-        const frameCount = Math.min(30, video.duration * 10); // Cap at 30 frames
-        const frameDelay = (video.duration * 1000) / frameCount;
+        const frameCount = 30; // Capture 30 frames
+        const frameInterval = video.duration / frameCount;
+        
+        recordingStatus.textContent = 'Converting to GIF...';
         
         for (let i = 0; i < frameCount; i++) {
-            const currentTime = (i / frameCount) * video.duration;
-            video.currentTime = currentTime;
-            
+            video.currentTime = i * frameInterval;
             await new Promise(resolve => {
                 video.onseeked = () => {
                     ctx.drawImage(video, 0, 0, 320, 240);
-                    gif.addFrame(ctx, { delay: frameDelay, copy: true });
+                    gif.addFrame(ctx, { 
+                        copy: true,
+                        delay: frameInterval * 1000
+                    });
                     resolve();
                 };
             });
@@ -208,10 +212,14 @@ async function handleStop() {
         gif.on('finished', (blob) => {
             const gifUrl = URL.createObjectURL(blob);
             selectedGif = gifUrl;
+            sendBtn.disabled = false;
+            
             const preview = document.createElement('img');
             preview.src = gifUrl;
-            document.getElementById('gif-preview').innerHTML = '';
-            document.getElementById('gif-preview').appendChild(preview);
+            const previewContainer = document.getElementById('gif-preview');
+            previewContainer.innerHTML = '';
+            previewContainer.appendChild(preview);
+            
             recordingStatus.textContent = 'GIF ready! Click Send to share.';
         });
         
@@ -247,6 +255,8 @@ function displayGifResults(gifs) {
 
         gifElement.addEventListener('click', () => {
             selectedGif = gif.media_formats.gif.url;
+            sendBtn.disabled = false;
+            
             Array.from(gifResults.children).forEach(el => {
                 el.classList.remove('selected');
             });
@@ -257,6 +267,7 @@ function displayGifResults(gifs) {
     });
 }
 
+// Event Listeners
 let searchTimeout;
 gifSearch.addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
@@ -271,6 +282,11 @@ gifSearch.addEventListener('input', (e) => {
     }, 300);
 });
 
+gifCaption.addEventListener('input', (e) => {
+    const length = e.target.value.length;
+    document.querySelector('.caption-counter').textContent = `${length}/100`;
+});
+
 sendBtn.addEventListener('click', () => {
     if (selectedGif) {
         const messageData = {
@@ -280,14 +296,17 @@ sendBtn.addEventListener('click', () => {
             replyTo: replyingTo
         };
         
-        ws.send(JSON.stringify(messageData));
+        chat.send(messageData);
         
+        // Reset UI
         selectedGif = null;
+        sendBtn.disabled = true;
         gifResults.innerHTML = '';
         gifSearch.value = '';
         gifCaption.value = '';
+        document.querySelector('.caption-counter').textContent = '0/100';
         document.getElementById('gif-preview').innerHTML = '';
-        cameraContainer.style.display = 'none';
+        cameraModal.style.display = 'none';
         recordingStatus.textContent = '';
         cancelReply();
         
@@ -298,12 +317,12 @@ sendBtn.addEventListener('click', () => {
 });
 
 cameraBtn.addEventListener('click', () => {
-    cameraContainer.style.display = 'block';
+    cameraModal.style.display = 'flex';
     initCamera();
 });
 
-closeCamera.addEventListener('click', () => {
-    cameraContainer.style.display = 'none';
+closeModal.addEventListener('click', () => {
+    cameraModal.style.display = 'none';
     if (mediaRecorder && videoPreview.srcObject) {
         videoPreview.srcObject.getTracks().forEach(track => track.stop());
     }
@@ -311,17 +330,21 @@ closeCamera.addEventListener('click', () => {
     document.getElementById('gif-preview').innerHTML = '';
     recordBtn.textContent = 'Start Recording';
     recordBtn.disabled = true;
+    recordBtn.classList.remove('recording');
     clearInterval(recordingInterval);
     recordingTimeLeft = 3;
     recordTimer.textContent = `${recordingTimeLeft}s`;
     recordingStatus.textContent = '';
 });
 
+cancelReplyBtn.addEventListener('click', cancelReply);
+
 let isRecording = false;
 recordBtn.addEventListener('click', () => {
     if (!isRecording) {
         mediaRecorder.start();
         recordBtn.textContent = 'Stop Recording';
+        recordBtn.classList.add('recording');
         isRecording = true;
         recordingStatus.textContent = 'Recording...';
         
@@ -348,15 +371,12 @@ recordBtn.addEventListener('click', () => {
         mediaRecorder.stop();
         isRecording = false;
         clearInterval(recordingInterval);
-        recordingStatus.textContent = 'Processing...';
     }
 });
 
 // Initialize with welcome message
-const welcomeMessage = createMessageElement({
+chat.send({
     gifUrl: 'https://media.tenor.com/kbHfGxe-WR0AAAAC/hi-gif-minkun.gif',
     caption: 'Welcome to GIFChat! Start a conversation by sending a GIF.',
-    handle: '@gifchat',
-    timestamp: new Date().toISOString()
+    handle: '@gifchat'
 });
-messagesContainer.appendChild(welcomeMessage);
