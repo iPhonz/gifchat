@@ -1,108 +1,14 @@
-const API_KEY = 'AIzaSyCkJ44bhL93TkK7MeyBUpfEo53FngnI1lU';
-const TENOR_API_URL = 'https://tenor.googleapis.com/v2';
-
-let selectedGif = null;
-let mediaRecorder = null;
-let recordedChunks = [];
-
-const gifSearch = document.getElementById('gif-search');
-const gifResults = document.getElementById('gif-results');
-const sendBtn = document.getElementById('send-btn');
-const messagesContainer = document.getElementById('messages');
-const cameraBtn = document.getElementById('camera-btn');
-const videoPreview = document.getElementById('video-preview');
-const recordBtn = document.getElementById('record-btn');
-const closeCamera = document.getElementById('close-camera');
-const cameraContainer = document.getElementById('camera-container');
-
-class MockWebSocket {
-    constructor() {
-        this.messages = [];
-    }
-
-    send(message) {
-        setTimeout(() => {
-            this.onmessage({ data: message });
-        }, 100);
-    }
-}
-
-const ws = new MockWebSocket();
-
-ws.onmessage = (event) => {
-    const message = document.createElement('div');
-    message.className = 'message';
-    const img = document.createElement('img');
-    img.src = event.data;
-    message.appendChild(img);
-    messagesContainer.appendChild(message);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-};
-
-async function initCamera() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        videoPreview.srcObject = stream;
-        videoPreview.play();
-        
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = handleDataAvailable;
-        mediaRecorder.onstop = handleStop;
-        
-        recordBtn.disabled = false;
-    } catch (error) {
-        console.error('Error accessing camera:', error);
-        alert('Unable to access camera. Please make sure you have granted camera permissions.');
-    }
-}
-
-function handleDataAvailable(event) {
-    if (event.data.size > 0) {
-        recordedChunks.push(event.data);
-    }
-}
-
-async function handleStop() {
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    recordedChunks = [];
-    
-    const gif = new GIF({
-        workers: 2,
-        quality: 10,
-        width: 320,
-        height: 240
-    });
-
-    const video = document.createElement('video');
-    video.src = URL.createObjectURL(blob);
-    video.addEventListener('loadeddata', () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 320;
-        canvas.height = 240;
-        const ctx = canvas.getContext('2d');
-        
-        const addFrame = () => {
-            if (video.currentTime < video.duration) {
-                ctx.drawImage(video, 0, 0, 320, 240);
-                gif.addFrame(ctx, { copy: true, delay: 100 });
-                video.currentTime += 0.1;
-            } else {
-                gif.render();
-            }
-        };
-
-        video.currentTime = 0;
-        addFrame();
-    });
-
-    gif.on('finished', (blob) => {
         const gifUrl = URL.createObjectURL(blob);
         selectedGif = gifUrl;
         const preview = document.createElement('img');
         preview.src = gifUrl;
+        preview.style.maxWidth = '100%';
+        preview.style.maxHeight = '100%';
         document.getElementById('gif-preview').innerHTML = '';
         document.getElementById('gif-preview').appendChild(preview);
     });
+    
+    gif.render();
 }
 
 async function searchGifs(query) {
@@ -125,14 +31,15 @@ function displayGifResults(gifs) {
         gifElement.className = 'gif-result';
         const img = document.createElement('img');
         img.src = gif.media_formats.tinygif.url;
+        img.alt = gif.content_description;
         gifElement.appendChild(img);
 
         gifElement.addEventListener('click', () => {
             selectedGif = gif.media_formats.gif.url;
             Array.from(gifResults.children).forEach(el => {
-                el.style.border = 'none';
+                el.classList.remove('selected');
             });
-            gifElement.style.border = '2px solid #0084ff';
+            gifElement.classList.add('selected');
         });
 
         gifResults.appendChild(gifElement);
@@ -161,6 +68,9 @@ sendBtn.addEventListener('click', () => {
         gifSearch.value = '';
         document.getElementById('gif-preview').innerHTML = '';
         cameraContainer.style.display = 'none';
+        Array.from(document.querySelectorAll('.gif-result')).forEach(el => {
+            el.classList.remove('selected');
+        });
     }
 });
 
@@ -176,25 +86,50 @@ closeCamera.addEventListener('click', () => {
     }
     videoPreview.srcObject = null;
     document.getElementById('gif-preview').innerHTML = '';
-    recordBtn.textContent = 'Record';
+    recordBtn.textContent = 'Start Recording';
     recordBtn.disabled = true;
-    isRecording = false;
+    clearInterval(recordingInterval);
+    recordingTimeLeft = 3;
+    recordTimer.textContent = `${recordingTimeLeft}s`;
 });
 
 let isRecording = false;
 recordBtn.addEventListener('click', () => {
     if (!isRecording) {
+        // Start recording
         mediaRecorder.start();
         recordBtn.textContent = 'Stop Recording';
+        isRecording = true;
+        
+        // Start countdown timer
+        recordingInterval = setInterval(() => {
+            recordingTimeLeft--;
+            recordTimer.textContent = `${recordingTimeLeft}s`;
+            
+            if (recordingTimeLeft <= 0) {
+                mediaRecorder.stop();
+                isRecording = false;
+                clearInterval(recordingInterval);
+            }
+        }, 1000);
+        
+        // Automatically stop after 3 seconds
         setTimeout(() => {
             if (mediaRecorder.state === 'recording') {
                 mediaRecorder.stop();
-                recordBtn.textContent = 'Record';
+                isRecording = false;
             }
-        }, 3000); // Maximum 3 second recording
+        }, 3000);
     } else {
+        // Stop recording
         mediaRecorder.stop();
-        recordBtn.textContent = 'Record';
+        isRecording = false;
+        clearInterval(recordingInterval);
     }
-    isRecording = !isRecording;
 });
+
+// Initialize messages container with dummy message
+const welcomeMessage = document.createElement('div');
+welcomeMessage.className = 'message';
+welcomeMessage.textContent = 'Welcome to GIFChat! Start a conversation by sending a GIF.';
+messagesContainer.appendChild(welcomeMessage);
