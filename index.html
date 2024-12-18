@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIF Chat</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="chat-container">
+            <div id="messages" class="messages"></div>
+            <div class="input-container">
+                <input type="text" id="gif-search" placeholder="Search for GIFs...">
+                <div id="gif-results" class="gif-results"></div>
+                <div class="button-container">
+                    <button id="camera-btn">Open Camera</button>
+                    <button id="send-btn">Send GIF</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="camera-container" class="camera-container" style="display: none;">
+            <video id="video-preview" class="video-preview"></video>
+            <div id="gif-preview" class="gif-preview"></div>
+            <button id="record-btn" disabled>Record</button>
+            <button id="close-camera" class="close-btn">&times;</button>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
