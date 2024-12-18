@@ -8,44 +8,53 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-wrapper">
+        <!-- Top Header -->
         <header class="app-header">
-            <div class="header-content">
-                <h1>GIFCHAT</h1>
-                <div class="user-info">
-                    <input type="text" id="user-handle" placeholder="Set your @username" value="@user">
-                </div>
+            <div class="logo">GIFCHAT</div>
+            <div class="user-profile">
+                <input type="text" id="user-handle" placeholder="Set your @username">
             </div>
         </header>
 
-        <main class="chat-container">
-            <div id="messages" class="messages"></div>
-            
-            <div class="composer">
-                <div class="reply-indicator" style="display: none">
-                    <span class="reply-text">Replying to </span>
-                    <span class="reply-to"></span>
-                    <button class="cancel-reply">&times;</button>
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Messages Area -->
+            <div id="messages" class="messages-area">
+                <!-- Messages will be inserted here -->
+            </div>
+
+            <!-- GIF Selection & Input Area -->
+            <div class="input-area">
+                <!-- Reply Indicator -->
+                <div id="reply-banner" class="reply-banner" style="display: none">
+                    <div class="reply-info">
+                        <span>Replying to </span>
+                        <span class="reply-to-name">@user</span>
+                    </div>
+                    <button class="cancel-reply-btn" aria-label="Cancel reply">✕</button>
                 </div>
 
-                <div class="search-container">
-                    <input type="text" id="gif-search" placeholder="Search for GIFs...">
-                    <div id="gif-results" class="gif-results"></div>
-                </div>
-
-                <div class="input-controls">
-                    <div class="caption-container">
-                        <input type="text" id="gif-caption" placeholder="Add a caption to your GIF..." maxlength="100">
-                        <span class="caption-counter">0/100</span>
+                <!-- Main Input Controls -->
+                <div class="controls-container">
+                    <!-- GIF Search -->
+                    <div class="search-section">
+                        <div class="search-bar">
+                            <input type="text" id="gif-search" placeholder="Search GIFs...">
+                            <button id="camera-btn" class="camera-btn" aria-label="Create GIF">
+                                📸 Create
+                            </button>
+                        </div>
+                        <div id="gif-results" class="gif-results hidden"></div>
                     </div>
 
-                    <div class="action-buttons">
-                        <button id="camera-btn" class="primary-btn">
-                            <span class="btn-icon">📸</span>
-                            Create GIF
-                        </button>
-                        <button id="send-btn" class="primary-btn send-btn" disabled>
-                            <span class="btn-icon">↗️</span>
+                    <!-- Caption & Send -->
+                    <div class="caption-section">
+                        <div class="caption-input">
+                            <input type="text" id="gif-caption" placeholder="Add a caption..." maxlength="100">
+                            <span class="char-count">0/100</span>
+                        </div>
+                        <button id="send-btn" class="send-btn" disabled>
                             Send GIF
                         </button>
                     </div>
@@ -53,41 +62,53 @@
             </div>
         </main>
 
-        <div id="camera-modal" class="modal" style="display: none">
+        <!-- Camera Modal -->
+        <div id="camera-modal" class="modal hidden">
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>Create GIF</h2>
-                    <button class="close-modal">&times;</button>
+                    <button class="close-modal-btn">✕</button>
                 </div>
 
-                <div class="camera-container">
-                    <video id="video-preview" playsinline autoplay></video>
-                    <div id="gif-preview"></div>
-                    
-                    <div class="camera-controls">
-                        <button id="record-btn" class="record-btn" disabled>
-                            <span class="record-icon"></span>
-                            Start Recording
-                        </button>
-                        <span class="record-timer">3s</span>
+                <div class="camera-view">
+                    <video id="camera-preview" autoplay playsinline></video>
+                    <div class="camera-overlay">
+                        <div class="recording-indicator hidden">Recording...</div>
                     </div>
-
-                    <div class="recording-status"></div>
                 </div>
+
+                <div id="preview-area" class="preview-area hidden">
+                    <!-- Generated GIF will appear here -->
+                </div>
+
+                <div class="camera-controls">
+                    <button id="record-btn" class="record-btn" disabled>
+                        <span class="record-icon"></span>
+                        Start Recording
+                    </button>
+                    <div class="record-timer">3s</div>
+                </div>
+
+                <div class="conversion-status"></div>
             </div>
         </div>
     </div>
 
+    <!-- Message Template -->
     <template id="message-template">
         <div class="message">
             <div class="message-content">
-                <img class="message-gif">
+                <img class="message-gif" alt="GIF">
                 <p class="message-caption"></p>
             </div>
-            <div class="message-meta">
-                <span class="message-handle"></span>
-                <span class="message-time"></span>
-                <button class="reply-btn">↩️ Reply</button>
+            <div class="message-footer">
+                <div class="message-info">
+                    <span class="message-handle"></span>
+                    <span class="message-time"></span>
+                </div>
+                <button class="reply-btn" aria-label="Reply to message">
+                    ↩️ Reply
+                </button>
             </div>
             <div class="replies"></div>
         </div>
