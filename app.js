@@ -99,9 +99,9 @@ async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
             video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                frameRate: { ideal: 15 }
+                width: { ideal: 480 },  // Reduced for better performance
+                height: { ideal: 360 }, // Reduced for better performance
+                frameRate: { ideal: 10 } // Reduced for smoother processing
             }
         });
         
@@ -110,7 +110,7 @@ async function initCamera() {
         
         state.mediaRecorder = new MediaRecorder(stream, {
             mimeType: 'video/webm;codecs=vp8',
-            videoBitsPerSecond: 2500000
+            videoBitsPerSecond: 1000000 // Reduced for better processing
         });
         
         state.mediaRecorder.ondataavailable = handleRecordedData;
@@ -125,7 +125,7 @@ async function initCamera() {
 }
 
 function handleRecordedData(event) {
-    if (event.data.size > 0) {
+    if (event.data && event.data.size > 0) {
         state.recordedChunks.push(event.data);
     }
 }
@@ -137,12 +137,24 @@ async function handleRecordingStopped() {
     
     try {
         elements.camera.status.textContent = 'Processing video...';
+        
+        if (state.recordedChunks.length === 0) {
+            throw new Error('No video data recorded');
+        }
+        
         const videoBlob = new Blob(state.recordedChunks, { type: 'video/webm' });
         state.recordedChunks = [];
         
         const video = document.createElement('video');
         video.src = URL.createObjectURL(videoBlob);
         video.muted = true;
+        
+        // Wait for video metadata to load
+        await new Promise((resolve, reject) => {
+            video.onloadedmetadata = resolve;
+            video.onerror = reject;
+            video.load();
+        });
         
         await video.play();
         
@@ -151,37 +163,69 @@ async function handleRecordingStopped() {
         canvas.height = 360;
         const ctx = canvas.getContext('2d');
         
+        // Configure GIF encoding with more optimal settings
         const gif = new GIF({
-            workers: 4,
-            quality: 8,
+            workers: 2,            // Reduced worker count for stability
+            quality: 10,           // Slightly reduced quality
             width: 480,
             height: 360,
-            workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js'
+            workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js',
+            background: '#ffffff'  // Added background color
         });
         
-        // Capture frames
-        const frameCount = Math.min(45, video.duration * 15);
+        // Capture frames with better error handling
+        const frameCount = Math.min(30, Math.floor(video.duration * 10)); // Reduced frame count
         const frameInterval = video.duration / frameCount;
         
         for (let i = 0; i < frameCount; i++) {
-            video.currentTime = i * frameInterval;
-            await new Promise(resolve => {
-                video.onseeked = () => {
-                    ctx.drawImage(video, 0, 0, 480, 360);
-                    gif.addFrame(ctx, {
-                        copy: true,
-                        delay: frameInterval * 1000,
-                        dispose: 2
-                    });
-                    resolve();
-                };
-            });
-            
-            elements.camera.status.textContent = 
-                `Creating GIF: ${Math.round((i / frameCount) * 100)}%`;
+            try {
+                video.currentTime = i * frameInterval;
+                await new Promise((resolve, reject) => {
+                    const timeoutId = setTimeout(() => {
+                        reject(new Error('Frame capture timeout'));
+                    }, 1000);
+                    
+                    video.onseeked = () => {
+                        try {
+                            ctx.drawImage(video, 0, 0, 480, 360);
+                            gif.addFrame(ctx, {
+                                copy: true,
+                                delay: Math.round(frameInterval * 1000),
+                                dispose: 1
+                            });
+                            clearTimeout(timeoutId);
+                            resolve();
+                        } catch (err) {
+                            clearTimeout(timeoutId);
+                            reject(err);
+                        }
+                    };
+                });
+                
+                elements.camera.status.textContent = 
+                    `Creating GIF: ${Math.round((i / frameCount) * 100)}%`;
+            } catch (frameError) {
+                console.error('Frame capture error:', frameError);
+                continue; // Skip problematic frames
+            }
         }
         
-        gif.on('finished', blob => {
+        // Add error handling for GIF rendering
+        gif.on('progress', progress => {
+            elements.camera.status.textContent = 
+                `Rendering GIF: ${Math.round(progress * 100)}%`;
+        });
+        
+        await new Promise((resolve, reject) => {
+            gif.on('finished', resolve);
+            gif.on('error', reject);
+            
+            try {
+                gif.render();
+            } catch (renderError) {
+                reject(renderError);
+            }
+        }).then(blob => {
             const gifUrl = URL.createObjectURL(blob);
             selectGif(gifUrl);
             
@@ -192,13 +236,16 @@ async function handleRecordingStopped() {
             elements.camera.preview.classList.remove('hidden');
             
             elements.camera.status.textContent = 'GIF ready!';
+        }).catch(error => {
+            throw error;
         });
-        
-        gif.render();
         
     } catch (error) {
         console.error('GIF creation error:', error);
-        elements.camera.status.textContent = 'Failed to create GIF';
+        elements.camera.status.textContent = 'Failed to create GIF: ' + error.message;
+        // Clean up resources
+        state.recordedChunks = [];
+        elements.camera.preview.classList.add('hidden');
     }
 }
 
@@ -244,11 +291,15 @@ elements.camera.close.addEventListener('click', () => {
     if (elements.camera.video.srcObject) {
         elements.camera.video.srcObject.getTracks().forEach(track => track.stop());
     }
+    // Clean up resources
+    state.recordedChunks = [];
+    elements.camera.preview.classList.add('hidden');
 });
 
 elements.camera.record.addEventListener('click', () => {
     if (!state.isRecording) {
         // Start recording
+        state.recordedChunks = []; // Clear any previous recordings
         state.mediaRecorder.start();
         state.isRecording = true;
         elements.camera.record.textContent = 'Stop Recording';
