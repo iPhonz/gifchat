@@ -3,29 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GIF Chat</title>
+    <title>GIFCHAT</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
 </head>
 <body>
+    <header class="app-header">
+        <h1>GIFCHAT</h1>
+    </header>
     <div class="container">
         <div class="chat-container">
             <div id="messages" class="messages"></div>
             <div class="input-container">
-                <input type="text" id="gif-search" placeholder="Search for GIFs...">
-                <div id="gif-results" class="gif-results"></div>
-                <div class="button-container">
-                    <button id="camera-btn">Open Camera</button>
-                    <button id="send-btn">Send GIF</button>
+                <div class="search-container">
+                    <input type="text" id="gif-search" placeholder="Search for GIFs...">
+                    <div id="gif-results" class="gif-results"></div>
+                </div>
+                <div class="action-buttons">
+                    <button id="camera-btn" class="action-btn">
+                        <span class="btn-icon">📸</span>
+                        Create GIF
+                    </button>
+                    <button id="send-btn" class="action-btn">
+                        <span class="btn-icon">📤</span>
+                        Send
+                    </button>
                 </div>
             </div>
         </div>
         
         <div id="camera-container" class="camera-container" style="display: none;">
-            <video id="video-preview" class="video-preview"></video>
+            <div class="camera-header">
+                <h2>Create GIF</h2>
+                <button id="close-camera" class="close-btn">&times;</button>
+            </div>
+            <video id="video-preview" class="video-preview" playsinline></video>
             <div id="gif-preview" class="gif-preview"></div>
-            <button id="record-btn" disabled>Record</button>
-            <button id="close-camera" class="close-btn">&times;</button>
+            <div class="camera-controls">
+                <button id="record-btn" disabled class="record-btn">Start Recording</button>
+                <div id="record-timer" class="record-timer">3s</div>
+            </div>
         </div>
     </div>
     <script src="app.js"></script>
